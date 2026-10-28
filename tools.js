@@ -1,0 +1,1 @@
+globalThis.AtelierTools = [{"slug":"price-time-machine","name":"あの日のねだん。","subtitle":"価格タイムマシン","description":"気になる商品の価格は、どれくらい変わった？ 百商品を、資料のある年代と出典付きで比べられます。","category":"暮らし","keywords":"価格 値段 物価 昔 比較 商品 お金","badge":"登録不要","href":"tools/price-time-machine/index.html"}];
