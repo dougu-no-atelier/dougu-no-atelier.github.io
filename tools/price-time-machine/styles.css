@@ -14,4 +14,7 @@ html{scroll-padding-top:20px}.hero-link{display:inline-flex;align-items:center;g
 
 @media(min-width:651px){.hero{padding:20px 0 8px}.hero h1{font-size:42px;line-height:1.4}.hero-tags,.hero .hero-note,.hero-link{display:none}.hero-art img{max-height:180px}.hero-art .art-caption{font-size:15px}}
 
+/* Answer reveal: cards and the detail view keep the price hidden until「答えを見る」. */
+.product-badge{align-self:flex-start;margin-top:auto;font-size:12px;font-weight:700;color:#9a4429;border:1px solid #e0b9a8;background:#fbefe8;border-radius:20px;padding:3px 12px;line-height:1.6}.reveal-panel{margin-top:20px;padding:22px 16px;text-align:center;background:#f3f0e7;border:1px dashed #c4b597;border-radius:6px}.reveal-prompt{font:700 18px/1.6 "Hiragino Mincho ProN","Yu Mincho",serif;margin:0 0 12px}.reveal-button{background:var(--accent);color:var(--white);font-size:15px;font-weight:700;padding:12px 36px;min-height:48px}.reveal-button:hover{background:#a24c31}.answer:focus{outline:none}@media(prefers-reduced-motion:no-preference){.answer:not([hidden]){animation:answer-in .35s ease-out}}@keyframes answer-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}@media(max-width:650px){.product-badge{font-size:11px;padding:2px 10px}.reveal-prompt{font-size:16px}.reveal-button{width:100%}}
+
 .hub-return{max-width:1200px;margin:auto;padding:8px 20px;font:13px/1.8 sans-serif}.hub-return a{display:inline-flex;align-items:center;min-height:44px;color:#293e35}
