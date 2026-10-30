@@ -3,6 +3,8 @@ const $=id=>document.getElementById(id),C=globalThis.PriceCore,data=globalThis.P
 const fmt=v=>new Intl.NumberFormat('ja-JP',{maximumFractionDigits:0}).format(v);
 const percentLabel=v=>Math.abs(v)>0&&Math.abs(v)<1?(v>0?'+1%未満':'−1%未満'):`${v>0?'+':v<0?'−':''}${fmt(Math.abs(v))}%`;
 const state={selected:data.find(i=>i.number===17)||data[0],category:'すべて',limit:24,snapshot:null,revealedId:null,order:[]};
+// 国民的定番（商品番号）。一覧ではこのグループを先に並べる。追加・変更はここだけで行う。
+const FAMOUS=new Set([1,2,3,4,5,9,11,17,18,19,22,24,30,31,32,33,37,39,41,42,51,65,91,121,171,179,180,181,186,188,195,198]);
 const positions=new Map(data.map((item,index)=>[item.id,index+1]));
 const normalize=s=>s.normalize('NFKC').toLocaleLowerCase('ja').replace(/\s/g,'').replace(/ビックマック/g,'ビッグマック');
 function text(id,value){$(id).textContent=value;}
@@ -32,8 +34,8 @@ function categories(){
 function products(){
  const query=normalize($('search').value.trim()),only=$('only-ready').checked;
  const filtered=data.filter(item=>(state.category==='すべて'||item.category===state.category)&&normalize(item.searchText).includes(query)&&(!only||ready(item)));
- // Larger price changes first (|percent|, then |difference|); items without a comparison keep catalogue order at the end.
- const ranked=filtered.map((item,index)=>({item,index,preview:previewFor(item)})).sort((a,b)=>(!a.preview-!b.preview)||(a.preview&&b.preview?(Math.abs(b.preview.result.percent)-Math.abs(a.preview.result.percent))||(Math.abs(b.preview.result.difference)-Math.abs(a.preview.result.difference)):0)||a.index-b.index);
+ // FAMOUS items first; within each group, larger price changes first (|percent|, then |difference|) and items without a comparison keep catalogue order at the end.
+ const ranked=filtered.map((item,index)=>({item,index,famous:FAMOUS.has(item.number),preview:previewFor(item)})).sort((a,b)=>(b.famous-a.famous)||(!a.preview-!b.preview)||(a.preview&&b.preview?(Math.abs(b.preview.result.percent)-Math.abs(a.preview.result.percent))||(Math.abs(b.preview.result.difference)-Math.abs(a.preview.result.difference)):0)||a.index-b.index);
  state.order=ranked.map(r=>r.item);productNav();
  const shown=ranked.slice(0,state.limit);
  text('result-count',`${filtered.length}件のうち${shown.length}件を表示`);$('clear-filters').hidden=!query&&state.category==='すべて'&&!only;
