@@ -2,7 +2,7 @@
 const $=id=>document.getElementById(id),C=globalThis.PriceCore,data=globalThis.PriceCatalog;
 const fmt=v=>new Intl.NumberFormat('ja-JP',{maximumFractionDigits:0}).format(v);
 const percentLabel=v=>Math.abs(v)>0&&Math.abs(v)<1?(v>0?'+1%未満':'−1%未満'):`${v>0?'+':v<0?'−':''}${fmt(Math.abs(v))}%`;
-const state={selected:data.find(i=>i.number===17)||data[0],category:'すべて',limit:24,snapshot:null,revealedId:null};
+const state={selected:data.find(i=>i.number===17)||data[0],category:'すべて',limit:24,snapshot:null,revealedId:null,order:[]};
 const positions=new Map(data.map((item,index)=>[item.id,index+1]));
 const normalize=s=>s.normalize('NFKC').toLocaleLowerCase('ja').replace(/\s/g,'').replace(/ビックマック/g,'ビッグマック');
 function text(id,value){$(id).textContent=value;}
@@ -17,10 +17,12 @@ function sourceLinks(item){
  if(candidates.length){const d=document.createElement('details'),summary=document.createElement('summary');summary.textContent='価格の根拠には未採用の資料候補';d.append(summary);for(const s of candidates){const a=document.createElement('a');a.href=s.url;a.textContent=s.title;a.target='_blank';a.rel='noopener noreferrer';d.append(a);}d.className='sources';$('sources').append(d);}
 }
 function imageFor(item,container){container.replaceChildren();if(item.art){const img=document.createElement('img');img.src=item.art;img.alt=item.name+'の生成イラスト';img.loading='lazy';container.append(img);}else{const s=document.createElement('span');s.className='category-caption';s.textContent=item.category;container.append(s);}}
-function selectProduct(item){state.revealedId=item.id;
+function selectProduct(item,scroll=true){state.revealedId=item.id;
  state.selected=item;
  if(!$('keep-year').checked&&!ready(item))$('year').value=String(item.records.find(r=>C.comparison(item,r.from,0)).from);
  render();products();
+ // Switching from inside the comparison (前へ・次へ・一覧から選ぶ) keeps the reader where they are.
+ if(!scroll)return;
  $('comparison-heading').focus({preventScroll:true});
  $('compare').scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
 }
@@ -32,6 +34,7 @@ function products(){
  const filtered=data.filter(item=>(state.category==='すべて'||item.category===state.category)&&normalize(item.searchText).includes(query)&&(!only||ready(item)));
  // Larger price changes first (|percent|, then |difference|); items without a comparison keep catalogue order at the end.
  const ranked=filtered.map((item,index)=>({item,index,preview:previewFor(item)})).sort((a,b)=>(!a.preview-!b.preview)||(a.preview&&b.preview?(Math.abs(b.preview.result.percent)-Math.abs(a.preview.result.percent))||(Math.abs(b.preview.result.difference)-Math.abs(a.preview.result.difference)):0)||a.index-b.index);
+ state.order=ranked.map(r=>r.item);productNav();
  const shown=ranked.slice(0,state.limit);
  text('result-count',`${filtered.length}件のうち${shown.length}件を表示`);$('clear-filters').hidden=!query&&state.category==='すべて'&&!only;
  text('catalogue-total',`出典付きの${data.length}商品`);text('ready-year-label',`${currentYear()}年で比較できるもの`);
@@ -45,6 +48,19 @@ function products(){
   button.append(no,visual,copy);button.addEventListener('click',()=>selectProduct(item));return button;
  }));
  $('empty').hidden=filtered.length!==0;$('more').hidden=shown.length>=filtered.length;
+}
+// The comparison navigator follows the catalogue order kept by products(); a selection outside the current filter is shown as a placeholder.
+function productNav(){
+ const order=state.order,index=order.findIndex(i=>i.id===state.selected.id);
+ $('prev-product').disabled=index<=0;$('next-product').disabled=index===-1?!order.length:index>=order.length-1;
+ const options=order.map(item=>{const o=document.createElement('option');o.value=item.id;o.textContent=item.brand+' '+item.name;o.selected=item.id===state.selected.id;return o;});
+ if(index===-1){const o=document.createElement('option');o.value='';o.textContent=state.selected.brand+' '+state.selected.name+'（今の絞り込みの対象外）';o.disabled=true;o.selected=true;options.unshift(o);}
+ $('product-select').replaceChildren(...options);
+}
+function stepProduct(step){
+ const order=state.order,index=order.findIndex(i=>i.id===state.selected.id),item=order[index===-1?(step>0?0:-1):index+step];
+ if(item)selectProduct(item,false);
+ if(document.activeElement?.disabled)$('product-select').focus({preventScroll:true});
 }
 function render(){
  const item=state.selected,year=currentYear(),before=C.historicalRecord(item.records,year),after=item.current;
@@ -145,6 +161,8 @@ $('save').addEventListener('click',async()=>{
 $('custom-form').addEventListener('submit',event=>{event.preventDefault();if(!$('custom-form').reportValidity())return;try{const name=$('custom-name').value.trim();if(!name)throw Error('商品名を入力してください。');const r=C.compare(Number($('custom-before').value),Number($('custom-after').value),0);text('custom-result',`「${name}」の価格の変化は${percentLabel(r.percent)}。あなたの入力による参考比較で、公表データではありません。`);}catch(error){text('custom-result',error.message);}});
 $('keep-year').addEventListener('change',()=>{if(!$('keep-year').checked&&!ready(state.selected))$('year').value=String(state.selected.records.find(r=>C.comparison(state.selected,r.from,0)).from);render();products();});
 $('search').addEventListener('input',()=>{state.limit=24;products();});$('only-ready').addEventListener('change',()=>{state.limit=24;products();});$('year').addEventListener('change',()=>{$('keep-year').checked=true;state.limit=24;render();products();});$('more').addEventListener('click',()=>{state.limit+=24;products();});
+$('prev-product').addEventListener('click',()=>stepProduct(-1));$('next-product').addEventListener('click',()=>stepProduct(1));
+$('product-select').addEventListener('change',()=>{const item=data.find(i=>i.id===$('product-select').value);if(item)selectProduct(item,false);});
 const years=[...new Set([1996,2006,2016,...data.flatMap(i=>i.records.map(r=>r.from))])].filter(y=>y>=1900&&y<=2026).sort((a,b)=>a-b);
 $('year').replaceChildren(...years.map(y=>{const o=document.createElement('option');o.value=String(y);o.textContent=y===1996?'1996年・三十年前':`${y}年・資料の時点`;return o;}));$('year').value='1996';
 const shared=new URLSearchParams(location.search),sharedItem=data.find(i=>i.id===shared.get('item')),sharedYear=Number(shared.get('year'));
