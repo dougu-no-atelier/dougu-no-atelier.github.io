@@ -17,7 +17,7 @@ function sourceLinks(item){
  if(candidates.length){const d=document.createElement('details'),summary=document.createElement('summary');summary.textContent='価格の根拠には未採用の資料候補';d.append(summary);for(const s of candidates){const a=document.createElement('a');a.href=s.url;a.textContent=s.title;a.target='_blank';a.rel='noopener noreferrer';d.append(a);}d.className='sources';$('sources').append(d);}
 }
 function imageFor(item,container){container.replaceChildren();if(item.art){const img=document.createElement('img');img.src=item.art;img.alt=item.name+'の生成イラスト';img.loading='lazy';container.append(img);}else{const s=document.createElement('span');s.className='category-caption';s.textContent=item.category;container.append(s);}}
-function selectProduct(item){
+function selectProduct(item){state.revealedId=item.id;
  state.selected=item;
  if(!$('keep-year').checked&&!ready(item))$('year').value=String(item.records.find(r=>C.comparison(item,r.from,0)).from);
  render();products();
