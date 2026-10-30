@@ -8,6 +8,7 @@ const normalize=s=>s.normalize('NFKC').toLocaleLowerCase('ja').replace(/\s/g,'')
 function text(id,value){$(id).textContent=value;}
 function currentYear(){return Number($('year').value);}
 function ready(item){return Boolean(C.comparison(item,currentYear(),0));}
+function previewFor(item){return C.comparison(item,currentYear(),0)||(!$('keep-year').checked?item.records.map(r=>C.comparison(item,r.from,0)).find(Boolean):null);}
 function sourceLinks(item){
  $('sources').replaceChildren();
  for(const s of item.sources||[]){const a=document.createElement('a');a.href=s.url;a.textContent=s.title+(s.checkedAt?`（確認：${s.checkedAt}）`:'');a.target='_blank';a.rel='noopener noreferrer';$('sources').append(a);}
@@ -29,15 +30,16 @@ function categories(){
 function products(){
  const query=normalize($('search').value.trim()),only=$('only-ready').checked;
  const filtered=data.filter(item=>(state.category==='すべて'||item.category===state.category)&&normalize(item.searchText).includes(query)&&(!only||ready(item)));
- const shown=filtered.slice(0,state.limit);
+ // Larger price changes first (|percent|, then |difference|); items without a comparison keep catalogue order at the end.
+ const ranked=filtered.map((item,index)=>({item,index,preview:previewFor(item)})).sort((a,b)=>(!a.preview-!b.preview)||(a.preview&&b.preview?(Math.abs(b.preview.result.percent)-Math.abs(a.preview.result.percent))||(Math.abs(b.preview.result.difference)-Math.abs(a.preview.result.difference)):0)||a.index-b.index);
+ const shown=ranked.slice(0,state.limit);
  text('result-count',`${filtered.length}件のうち${shown.length}件を表示`);$('clear-filters').hidden=!query&&state.category==='すべて'&&!only;
  text('catalogue-total',`出典付きの${data.length}商品`);text('ready-year-label',`${currentYear()}年で比較できるもの`);
- $('catalogue-grid').replaceChildren(...shown.map(item=>{
+ $('catalogue-grid').replaceChildren(...shown.map(({item,preview})=>{
   const button=document.createElement('button');button.type='button';button.className='product'+(item.art?' has-art':'');button.setAttribute('aria-pressed',String(item.id===state.selected.id));button.setAttribute('aria-label',item.brand+' '+item.name+' '+item.spec);
   const no=document.createElement('span');no.className='product-number';no.textContent=String(positions.get(item.id)).padStart(3,'0');
   const visual=document.createElement('span');visual.className='product-visual';imageFor(item,visual);
   const copy=document.createElement('span');copy.className='product-copy';
-  const preview=C.comparison(item,currentYear(),0)||(!$('keep-year').checked?item.records.map(r=>C.comparison(item,r.from,0)).find(Boolean):null);
   // Cards never show the answer; prices and years appear only after「答えを見る」.
   for(const [cls,value]of [['product-brand',item.brand],['product-name',item.name],['product-spec',item.spec],preview?['product-badge','いくら変わった？']:['product-price','この年代は未確認'],preview?null:['product-status','資料のある年代に切り替えられます']].filter(Boolean)){const span=document.createElement('span');span.className=cls;span.textContent=value;copy.append(span);}
   button.append(no,visual,copy);button.addEventListener('click',()=>selectProduct(item));return button;
