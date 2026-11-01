@@ -2,7 +2,7 @@
 const $=id=>document.getElementById(id),C=globalThis.PriceCore,data=globalThis.PriceCatalog;
 const fmt=v=>new Intl.NumberFormat('ja-JP',{maximumFractionDigits:0}).format(v);
 const percentLabel=v=>Math.abs(v)>0&&Math.abs(v)<1?(v>0?'+1%未満':'−1%未満'):`${v>0?'+':v<0?'−':''}${fmt(Math.abs(v))}%`;
-const state={selected:data.find(i=>i.number===17)||data[0],category:'すべて',limit:24,snapshot:null,revealedId:null,order:[]};
+const state={selected:data.find(i=>i.number===17)||data[0],category:'すべて',limit:24,snapshot:null,revealedId:null,order:[],openIds:new Set()};
 // 国民的定番（商品番号）。一覧ではこのグループを先に並べる。追加・変更はここだけで行う。
 const FAMOUS=new Set([1,2,3,4,5,9,11,13,15,16,17,18,19,21,22,23,24,30,31,32,33,35,37,39,40,41,42,51,54,63,65,87,91,121,171,179,180,181,186,188,191,194,195,198]);
 const positions=new Map(data.map((item,index)=>[item.id,index+1]));
@@ -10,7 +10,21 @@ const normalize=s=>s.normalize('NFKC').toLocaleLowerCase('ja').replace(/\s/g,'')
 function text(id,value){$(id).textContent=value;}
 function currentYear(){return Number($('year').value);}
 function ready(item){return Boolean(C.comparison(item,currentYear(),0));}
-function previewFor(item){return C.comparison(item,currentYear(),0)||(!$('keep-year').checked?item.records.map(r=>C.comparison(item,r.from,0)).find(Boolean):null);}
+// The comparison a card uses, with the year it was made for: the selected year, or (unless the year is fixed) the first documented record year.
+function previewMatch(item){
+ const year=currentYear(),comparison=C.comparison(item,year,0);if(comparison)return {year,comparison};
+ if($('keep-year').checked)return null;
+ for(const r of item.records){const c=C.comparison(item,r.from,0);if(c)return {year:r.from,comparison:c};}
+ return null;
+}
+function previewFor(item){return previewMatch(item)?.comparison||null;}
+function deltaText(comparison){
+ const {result}=comparison;const change=result.difference===0?'価格は同じ':Math.abs(result.difference)<1?'価格の差は1円未満':`${fmt(Math.abs(result.difference))}円${result.difference>0?'高く':'安く'}`;
+ const hasLowerBound=comparison.before.lowerBound||comparison.after.lowerBound;
+ return `${hasLowerBound?'公表の下限価格を含む参考比較：':''}${change}（${percentLabel(result.percent)}）${hasLowerBound?'。利用条件によって価格は異なります。':''}`;
+}
+function unitText(comparison){const u=comparison?.unitComparison;return u?`容量：${comparison.before.quantity.value}${u.unit} → ${comparison.after.quantity.value}${u.unit}。100${u.unit}あたり税抜 ${fmt(u.beforePrice)}円 → ${fmt(u.afterPrice)}円（${percentLabel(u.result.percent)}）。`:'';}
+function priceText(record){return fmt(C.taxExclusive(record))+'円'+(record.lowerBound?'〜':'');}
 function sourceLinks(item){
  $('sources').replaceChildren();
  for(const s of item.sources||[]){const a=document.createElement('a');a.href=s.url;a.textContent=s.title+(s.checkedAt?`（確認：${s.checkedAt}）`:'');a.target='_blank';a.rel='noopener noreferrer';$('sources').append(a);}
@@ -35,19 +49,27 @@ function products(){
  const query=normalize($('search').value.trim()),only=$('only-ready').checked;
  const filtered=data.filter(item=>(state.category==='すべて'||item.category===state.category)&&normalize(item.searchText).includes(query)&&(!only||ready(item)));
  // FAMOUS items first; within each group, larger price changes first (|percent|, then |difference|) and items without a comparison keep catalogue order at the end.
- const ranked=filtered.map((item,index)=>({item,index,famous:FAMOUS.has(item.number),preview:previewFor(item)})).sort((a,b)=>(b.famous-a.famous)||(!a.preview-!b.preview)||(a.preview&&b.preview?(Math.abs(b.preview.result.percent)-Math.abs(a.preview.result.percent))||(Math.abs(b.preview.result.difference)-Math.abs(a.preview.result.difference)):0)||a.index-b.index);
+ const ranked=filtered.map((item,index)=>{const match=previewMatch(item);return {item,index,famous:FAMOUS.has(item.number),match,preview:match?.comparison};}).sort((a,b)=>(b.famous-a.famous)||(!a.preview-!b.preview)||(a.preview&&b.preview?(Math.abs(b.preview.result.percent)-Math.abs(a.preview.result.percent))||(Math.abs(b.preview.result.difference)-Math.abs(a.preview.result.difference)):0)||a.index-b.index);
  state.order=ranked.map(r=>r.item);productNav();
  const shown=ranked.slice(0,state.limit);
  text('result-count',`${filtered.length}件のうち${shown.length}件を表示`);$('clear-filters').hidden=!query&&state.category==='すべて'&&!only;
  text('catalogue-total',`出典付きの${data.length}商品`);text('ready-year-label',`${currentYear()}年で比較できるもの`);
- $('catalogue-grid').replaceChildren(...shown.map(({item,preview})=>{
-  const button=document.createElement('button');button.type='button';button.className='product'+(item.art?' has-art':'');button.setAttribute('aria-pressed',String(item.id===state.selected.id));button.setAttribute('aria-label',item.brand+' '+item.name+' '+item.spec);
+ $('catalogue-grid').replaceChildren(...shown.map(({item,match,preview})=>{
+  const open=state.openIds.has(item.id),answerId='card-answer-'+item.id;
+  const card=document.createElement('div');card.className='product-card'+(item.id===state.selected.id?' selected':'')+(open?' open':'');
+  const button=document.createElement('button');button.type='button';button.className='product'+(item.art?' has-art':'');button.setAttribute('aria-expanded',String(open));button.setAttribute('aria-controls',answerId);button.setAttribute('aria-label',item.brand+' '+item.name+' '+item.spec);
   const no=document.createElement('span');no.className='product-number';no.textContent=String(positions.get(item.id)).padStart(3,'0');
   const visual=document.createElement('span');visual.className='product-visual';imageFor(item,visual);
   const copy=document.createElement('span');copy.className='product-copy';
-  // Cards never show the answer; prices and years appear only after「答えを見る」.
+  // A closed card never shows the answer. Clicking the card opens it in place (no scrolling); only「くわしく見る」moves to the comparison.
   for(const [cls,value]of [['product-brand',item.brand],['product-name',item.name],['product-spec',item.spec],preview?['product-badge','いくら変わった？']:['product-price','この年代は未確認'],preview?null:['product-status','資料のある年代に切り替えられます']].filter(Boolean)){const span=document.createElement('span');span.className=cls;span.textContent=value;copy.append(span);}
-  button.append(no,visual,copy);button.addEventListener('click',()=>selectProduct(item));return button;
+  button.append(no,visual,copy);
+  const answer=document.createElement('div');answer.className='product-answer';answer.id=answerId;answer.hidden=!open;
+  const lines=match?[[`${match.year}年 ${priceText(preview.before)} → 現在 ${priceText(preview.after)}`,'product-answer-price'],[deltaText(preview),'product-answer-delta'],[unitText(preview),'product-answer-unit']]:[['この年代は未確認です。資料のある年代では比較できます。','product-answer-note']];
+  for(const [value,cls]of lines.filter(([value])=>value)){const p=document.createElement('p');p.className=cls;p.textContent=value;answer.append(p);}
+  const more=document.createElement('button');more.type='button';more.className='text-button product-more';more.textContent='くわしく見る（年ごとの比較）';more.addEventListener('click',()=>selectProduct(item));answer.append(more);
+  button.addEventListener('click',()=>{const next=!state.openIds.has(item.id);if(next)state.openIds.add(item.id);else state.openIds.delete(item.id);button.setAttribute('aria-expanded',String(next));answer.hidden=!next;card.classList.toggle('open',next);});
+  card.append(button,answer);return card;
  }));
  $('empty').hidden=filtered.length!==0;$('more').hidden=shown.length>=filtered.length;
 }
@@ -75,7 +97,7 @@ function render(){
  $('available-period').hidden=Boolean(comparison)||(!available.length&&!referenceYear);
  if(available.length||referenceYear){const next=available[0]||referenceYear;text('available-period',available.length?`資料のある${next}年で比べる`:`確認済みの${next}年の価格を見る`);$('available-period').onclick=()=>{$('year').value=String(next);render();products();};}
  $('quantity-comparison').hidden=!comparison?.unitComparison;
- if(comparison?.unitComparison){const u=comparison.unitComparison;text('quantity-comparison',`容量：${comparison.before.quantity.value}${u.unit} → ${comparison.after.quantity.value}${u.unit}。100${u.unit}あたり税抜 ${fmt(u.beforePrice)}円 → ${fmt(u.afterPrice)}円（${percentLabel(u.result.percent)}）。`);}
+ if(comparison?.unitComparison)text('quantity-comparison',unitText(comparison));
  text('selected-category',item.category);text('brand',item.brand);text('name',item.name);text('spec',item.spec);
  text('comparison-kind',({generation:'世代・仕様が異なる比較。単純な値上がりとは区別して確認します。','quantity-change':'容量が変わった商品。個数と同じ量あたりの差を併記します。',service:'同じ区分のサービス料金。提供条件の違いも確認します。'})[item.comparisonType]||'同じ商品・仕様の比較を確認しています。');
  $('selected-image').hidden=!item.art;$('no-art').hidden=Boolean(item.art);
@@ -91,9 +113,7 @@ function render(){
  fitPrices();
  text('research-status','');text('conditions',item.notes);text('basis',item.basis||'税区分・容量・型番・地域などを確認してから比較します。');sourceLinks(item);
  if(comparison){
-  const {result}=comparison;const change=result.difference===0?'価格は同じ':Math.abs(result.difference)<1?'価格の差は1円未満':`${fmt(Math.abs(result.difference))}円${result.difference>0?'高く':'安く'}`;
-  const hasLowerBound=comparison.before.lowerBound||comparison.after.lowerBound;
-  text('delta',`${hasLowerBound?'公表の下限価格を含む参考比較：':''}${change}（${percentLabel(result.percent)}）${hasLowerBound?'。利用条件によって価格は異なります。':''}`);
+  text('delta',deltaText(comparison));
   state.snapshot={item,year,...comparison};$('save').disabled=false;
  }else{
   text('delta',`${year}年との税抜比較はまだできません。未確認の価格から倍率は計算しません。`);
