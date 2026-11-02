@@ -33,7 +33,33 @@
     }
     return { before, after, beforePrice:b, afterPrice:a, result:compare(b,a,budget), unitComparison };
   }
-  const api = { compare, atYear, taxExclusive, historicalRecord, comparison };
+  // 厚生労働省「地域別最低賃金の全国加重平均（年度値・時給）」
+  const MIN_WAGES = {1986:451,1987:461,1988:474,1989:492,1990:516,1991:542,1992:565,1993:583,1994:597,1995:611,1996:623,1997:637,1998:649,1999:654,2000:659,2001:663,2002:663,2003:664,2004:665,2005:668,2006:673,2007:687,2008:703,2009:713,2010:730,2011:737,2012:749,2013:764,2014:780,2015:798,2016:823,2017:848,2018:874,2019:901,2020:902,2021:930,2022:961,2023:1004,2024:1055,2025:1121,2026:1177};
+  function wageFor(year) {
+    if (!Number.isInteger(year) || year < 1986) return null;
+    return year > 2026 ? MIN_WAGES[2026] : MIN_WAGES[year];
+  }
+  function laborHours(price, year) {
+    const wage = wageFor(year);
+    return wage === null ? null : price / wage;
+  }
+  function topIncreases(items, n) {
+    const picked = [];
+    items.forEach((item, index) => {
+      let best = null;
+      for (const record of item.records || []) {
+        const result = comparison(item, record.from, 0);
+        if (!result || !(result.result.percent > 0)) continue;
+        if (!best || result.result.percent > best.result.result.percent ||
+          (result.result.percent === best.result.result.percent && Math.abs(result.result.difference) > Math.abs(best.result.result.difference))) best = { record, result };
+      }
+      if (best) picked.push({ item, record: best.record, result: best.result, index });
+    });
+    picked.sort((a, b) => (b.result.result.percent - a.result.result.percent) || (Math.abs(b.result.result.difference) - Math.abs(a.result.result.difference)) || (a.index - b.index));
+    // result は comparison の戻り値に、percent / difference / before / after（税抜価格）を手前に出したもの。
+    return picked.slice(0, n).map(({ item, record, result }) => ({ item, record, result: { ...result, ...result.result, before: result.beforePrice, after: result.afterPrice } }));
+  }
+  const api = { compare, atYear, taxExclusive, historicalRecord, comparison, wageFor, laborHours, topIncreases };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PriceCore = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

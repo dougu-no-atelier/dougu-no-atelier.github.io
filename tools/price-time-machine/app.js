@@ -114,10 +114,23 @@ function render(){
  text('research-status','');text('conditions',item.notes);text('basis',item.basis||'税区分・容量・型番・地域などを確認してから比較します。');sourceLinks(item);
  if(comparison){
   text('delta',deltaText(comparison));
+  wageLine(item,comparison);
   state.snapshot={item,year,...comparison};$('save').disabled=false;
  }else{
   text('delta',`${year}年との税抜比較はまだできません。未確認の価格から倍率は計算しません。`);
+  wageLine(item,null);
  }
+}
+function hoursLabel(h){return h<1?`約${Math.max(1,Math.round(h*60))}分`:h<10?`約${h.toFixed(1)}時間`:`約${Math.round(h)}時間`;}
+// 差額の行の後に、最低賃金での労働時間の換算を1行足す。換算できないときは何も出さない。
+function wageLine(item,comparison){
+ $('delta').parentElement.querySelector('.wage-line')?.remove();
+ if(!comparison)return;
+ const from=comparison.before.from,toYear=Math.min(item.current.to,2026),w1=C.wageFor(from),w2=C.wageFor(toYear);
+ if(w1===null||w2===null)return;
+ const p=document.createElement('p');p.className='wage-line';
+ p.textContent=`労働時間で比べると： ${from}年は最低賃金（時給${fmt(w1)}円）で${hoursLabel(comparison.beforePrice/w1)}、${toYear}年は時給${fmt(w2)}円で${hoursLabel(comparison.afterPrice/w2)}`;
+ $('delta').after(p);
 }
 function showAnswer(shown){
  $('reveal-panel').hidden=shown;$('answer').hidden=!shown;$('evidence').hidden=!shown;$('reveal').setAttribute('aria-expanded',String(shown));
@@ -191,7 +204,20 @@ const shared=new URLSearchParams(location.search),sharedItem=data.find(i=>i.id==
 if(sharedItem){state.selected=sharedItem;const valid=C.comparison(sharedItem,sharedYear,0);$('year').value=String(valid?sharedYear:sharedItem.records.find(r=>C.comparison(sharedItem,r.from,0)).from);}
 const documented=data.filter(i=>i.status==='documented').length;
 text('coverage-summary',`出典付きで比較できる${documented}商品を収録。比較する年代は商品ごとに異なります。すべてが1996年と2026年の比較ではありません。`);
-categories();render();products();
+function ranking(){
+ $('rankingList').replaceChildren(...C.topIncreases(data,10).map(({item,record,result},index)=>{
+  const li=document.createElement('li'),button=document.createElement('button');button.type='button';button.className='rank-row';
+  const no=document.createElement('span');no.className='rank-no';no.textContent=String(index+1);button.append(no);
+  if(item.art){const img=document.createElement('img');img.className='rank-art';img.src=item.art;img.alt='';img.loading='lazy';button.append(img);}
+  const copy=document.createElement('span');copy.className='rank-copy';
+  for(const [cls,value]of [['rank-name',item.brand+' '+item.name],['rank-price',`${record.from}年 ${priceText(record)} → 現在 ${priceText(item.current)}`]]){const span=document.createElement('span');span.className=cls;span.textContent=value;copy.append(span);}
+  const pct=document.createElement('span');pct.className='rank-percent';pct.textContent=percentLabel(result.percent);
+  button.append(copy,pct);
+  button.addEventListener('click',()=>{$('year').value=String(record.from);$('keep-year').checked=true;state.limit=24;selectProduct(item);});
+  li.append(button);return li;
+ }));
+}
+categories();render();products();ranking();
 
 $('clear-filters').addEventListener('click',()=>{state.category='すべて';state.limit=24;$('search').value='';$('only-ready').checked=false;categories();products();$('genre-summary').textContent='ジャンル・年代で絞る';$('search').focus({preventScroll:true});});
 document.querySelector('.back-to-products').addEventListener('click',()=>{$('search').focus({preventScroll:true});});
