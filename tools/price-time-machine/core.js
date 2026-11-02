@@ -12,7 +12,7 @@
     return item.history.filter(point => point.year <= year).at(-1) || null;
   }
   function taxExclusive(record) {
-    if (!record || !Number.isFinite(record.price) || record.price <= 0) return null;
+    if (!record || !Number.isFinite(record.price) || record.price < 0) return null;
     if (record.taxMode === 'exclusive') return record.price;
     if (record.taxMode === 'inclusive' && Number.isFinite(record.taxRate) && record.taxRate >= 0 && record.taxRate <= 1) return record.price / (1 + record.taxRate);
     return null;
@@ -31,7 +31,8 @@
       const beforeUnitPrice=b/bq.value*100, afterUnitPrice=a/aq.value*100;
       unitComparison={unit:bq.unit,beforePrice:beforeUnitPrice,afterPrice:afterUnitPrice,result:compare(beforeUnitPrice,afterUnitPrice,0)};
     }
-    return { before, after, beforePrice:b, afterPrice:a, result:compare(b,a,budget), unitComparison };
+    const result=a===0?{difference:-b,ratio:0,percent:-100,beforeCount:Math.floor((budget+1e-8)/b),afterCount:null}:compare(b,a,budget);
+    return { before, after, beforePrice:b, afterPrice:a, result, unitComparison };
   }
   // 厚生労働省「地域別最低賃金の全国加重平均（年度値・時給）」
   const MIN_WAGES = {1986:451,1987:461,1988:474,1989:492,1990:516,1991:542,1992:565,1993:583,1994:597,1995:611,1996:623,1997:637,1998:649,1999:654,2000:659,2001:663,2002:663,2003:664,2004:665,2005:668,2006:673,2007:687,2008:703,2009:713,2010:730,2011:737,2012:749,2013:764,2014:780,2015:798,2016:823,2017:848,2018:874,2019:901,2020:902,2021:930,2022:961,2023:1004,2024:1055,2025:1121,2026:1177};

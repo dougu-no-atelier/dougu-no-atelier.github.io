@@ -4,7 +4,7 @@ const fmt=v=>new Intl.NumberFormat('ja-JP',{maximumFractionDigits:0}).format(v);
 const percentLabel=v=>Math.abs(v)>0&&Math.abs(v)<1?(v>0?'+1%未満':'−1%未満'):`${v>0?'+':v<0?'−':''}${fmt(Math.abs(v))}%`;
 const state={selected:data.find(i=>i.number===17)||data[0],category:'すべて',limit:24,snapshot:null,revealedId:null,order:[],openIds:new Set()};
 // 国民的定番（商品番号）。一覧ではこのグループを先に並べる。追加・変更はここだけで行う。
-const FAMOUS=new Set([1,2,3,4,5,9,11,13,15,16,17,18,19,21,22,23,24,30,31,32,33,35,37,39,40,41,42,51,54,63,65,87,91,121,171,179,180,181,186,188,191,194,195,198,201,202,203,204]);
+const FAMOUS=new Set([1,2,3,4,5,9,11,13,15,16,17,18,19,21,22,23,24,30,31,32,33,35,37,39,40,41,42,51,54,63,65,87,91,121,171,179,180,181,186,188,191,194,195,198,201,202,203,204,205,206,207,208]);
 const positions=new Map(data.map((item,index)=>[item.id,index+1]));
 const normalize=s=>s.normalize('NFKC').toLocaleLowerCase('ja').replace(/\s/g,'').replace(/ビックマック/g,'ビッグマック');
 function text(id,value){$(id).textContent=value;}
@@ -121,7 +121,7 @@ function render(){
   wageLine(item,null);
  }
 }
-function hoursLabel(h){return h<1?`約${Math.max(1,Math.round(h*60))}分`:h<10?`約${h.toFixed(1)}時間`:`約${Math.round(h)}時間`;}
+function hoursLabel(h){if(h===0)return '0分';return h<1?`約${Math.max(1,Math.round(h*60))}分`:h<10?`約${h.toFixed(1)}時間`:`約${Math.round(h)}時間`;}
 // 差額の行の後に、最低賃金での労働時間の換算を1行足す。換算できないときは何も出さない。
 function wageLine(item,comparison){
  $('delta').parentElement.querySelector('.wage-line')?.remove();
