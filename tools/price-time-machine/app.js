@@ -20,6 +20,8 @@ function previewMatch(item){return headlineMatch(item);}
 function yearsFor(item){return item.records.map(r=>r.from).filter(y=>C.comparison(item,y,0));}
 function setYearOptions(item,preferred){
  const years=yearsFor(item);
+ // A shared link may name a year inside a documented period that is not a period start; keep that year selectable.
+ if(preferred!==undefined&&!years.includes(preferred)&&C.comparison(item,preferred,0))years.push(preferred),years.sort((a,b)=>a-b);
  $('year').replaceChildren(...years.map(y=>{const o=document.createElement('option');o.value=String(y);o.textContent=y===1996?'1996年・三十年前':`${y}年・資料の時点`;return o;}));
  const target=years.includes(preferred)?preferred:headlineMatch(item)?.year;
  if(target!==undefined)$('year').value=String(target);
