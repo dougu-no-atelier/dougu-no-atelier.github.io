@@ -1,6 +1,6 @@
 'use strict';
 const PREFIX='price-memories:'+self.registration.scope+':';
-const CACHE=PREFIX+'62d5b63a2d3d7c56';
+const CACHE=PREFIX+'be6a56947416d1db';
 const SHELL=['./','index.html','styles.css','core.js','catalog.js','app.js','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png'];
 const scope=new URL(self.registration.scope);
 self.addEventListener('install',event=>{self.skipWaiting();event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));});

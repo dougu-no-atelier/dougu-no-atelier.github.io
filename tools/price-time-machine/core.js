@@ -60,7 +60,17 @@
     // result は comparison の戻り値に、percent / difference / before / after（税抜価格）を手前に出したもの。
     return picked.slice(0, n).map(({ item, record, result }) => ({ item, record, result: { ...result, ...result.result, before: result.beforePrice, after: result.afterPrice } }));
   }
-  const api = { compare, atYear, taxExclusive, historicalRecord, comparison, wageFor, laborHours, topIncreases };
+  function impactOf(item) {
+    let best = null;
+    for (const record of item.records) {
+      const c = comparison(item, record.from, 0);
+      if (!c) continue;
+      const p = Math.abs(c.result.percent), d = Math.abs(c.result.difference);
+      if (!best || p > best.percent || (p === best.percent && d > best.difference)) best = { percent: p, difference: d };
+    }
+    return best;
+  }
+  const api = { compare, atYear, taxExclusive, historicalRecord, comparison, wageFor, laborHours, topIncreases, impactOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PriceCore = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

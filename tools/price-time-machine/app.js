@@ -3,8 +3,6 @@ const $=id=>document.getElementById(id),C=globalThis.PriceCore,data=globalThis.P
 const fmt=v=>new Intl.NumberFormat('ja-JP',{maximumFractionDigits:0}).format(v);
 const percentLabel=v=>Math.abs(v)>0&&Math.abs(v)<1?(v>0?'+1%未満':'−1%未満'):`${v>0?'+':v<0?'−':''}${fmt(Math.abs(v))}%`;
 const state={selected:data.find(i=>i.number===17)||data[0],category:'すべて',limit:24,snapshot:null,revealedId:null,order:[],openIds:new Set()};
-// 国民的定番（商品番号）。一覧ではこのグループを先に並べる。追加・変更はここだけで行う。
-const FAMOUS=new Set([1,2,3,4,5,9,11,13,15,16,17,18,19,21,22,23,24,30,31,32,33,35,37,39,40,41,42,51,54,63,65,87,91,121,171,179,180,181,186,188,191,194,195,198,201,202,203,204,205,206,207,208]);
 const positions=new Map(data.map((item,index)=>[item.id,index+1]));
 const normalize=s=>s.normalize('NFKC').toLocaleLowerCase('ja').replace(/\s/g,'').replace(/ビックマック/g,'ビッグマック');
 function text(id,value){$(id).textContent=value;}
@@ -48,8 +46,8 @@ function categories(){
 function products(){
  const query=normalize($('search').value.trim()),only=$('only-ready').checked;
  const filtered=data.filter(item=>(state.category==='すべて'||item.category===state.category)&&normalize(item.searchText).includes(query)&&(!only||ready(item)));
- // FAMOUS items first; within each group, larger price changes first (|percent|, then |difference|) and items without a comparison keep catalogue order at the end.
- const ranked=filtered.map((item,index)=>{const match=previewMatch(item);return {item,index,famous:FAMOUS.has(item.number),match,preview:match?.comparison};}).sort((a,b)=>(b.famous-a.famous)||(!a.preview-!b.preview)||(a.preview&&b.preview?(Math.abs(b.preview.result.percent)-Math.abs(a.preview.result.percent))||(Math.abs(b.preview.result.difference)-Math.abs(a.preview.result.difference)):0)||a.index-b.index);
+ // Impact order: each item's biggest price change (either direction, best record) first; ties by yen difference, then catalogue order.
+ const ranked=filtered.map((item,index)=>{const match=previewMatch(item);return {item,index,match,preview:match?.comparison,impact:C.impactOf(item)};}).sort((a,b)=>((b.impact?.percent||0)-(a.impact?.percent||0))||((b.impact?.difference||0)-(a.impact?.difference||0))||a.index-b.index);
  state.order=ranked.map(r=>r.item);productNav();
  const shown=ranked.slice(0,state.limit);
  text('result-count',`${filtered.length}件のうち${shown.length}件を表示`);$('clear-filters').hidden=!query&&state.category==='すべて'&&!only;
@@ -99,7 +97,7 @@ function render(){
  $('quantity-comparison').hidden=!comparison?.unitComparison;
  if(comparison?.unitComparison)text('quantity-comparison',unitText(comparison));
  text('selected-category',item.category);text('brand',item.brand);text('name',item.name);text('spec',item.spec);
- text('comparison-kind',({generation:'世代・仕様が異なる比較。単純な値上がりとは区別して確認します。','quantity-change':'容量が変わった商品。個数と同じ量あたりの差を併記します。',service:'同じ区分のサービス料金。提供条件の違いも確認します。'})[item.comparisonType]||'同じ商品・仕様の比較を確認しています。');
+ text('comparison-kind',({generation:'世代・仕様が異なる比較。単純な値上がりとは区別して確認します。','quantity-change':'容量が変わった商品。個数と同じ量あたりの差を併記します。',service:'同じ区分のサービス料金。提供条件の違いも確認します。',index:'公表された指数・統計の平均価格どうしの比較。集計条件の違いも確認します。'})[item.comparisonType]||'同じ商品・仕様の比較を確認しています。');
  $('selected-image').hidden=!item.art;$('no-art').hidden=Boolean(item.art);
  if(item.art){$('selected-image').src=item.art;$('selected-image').alt=item.name+'の生成イラスト';}else{$('selected-image').removeAttribute('src');}
  text('art-note',item.art?item.artNote||'生成イラスト。実物写真・当時の形状資料ではありません。':'');
