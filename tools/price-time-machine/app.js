@@ -7,13 +7,22 @@ const positions=new Map(data.map((item,index)=>[item.id,index+1]));
 const normalize=s=>s.normalize('NFKC').toLocaleLowerCase('ja').replace(/\s/g,'').replace(/ビックマック/g,'ビッグマック');
 function text(id,value){$(id).textContent=value;}
 function currentYear(){return Number($('year').value);}
-function ready(item){return Boolean(C.comparison(item,currentYear(),0));}
-// The comparison a card uses, with the year it was made for: the selected year, or (unless the year is fixed) the first documented record year.
-function previewMatch(item){
- const year=currentYear(),comparison=C.comparison(item,year,0);if(comparison)return {year,comparison};
- if($('keep-year').checked)return null;
- for(const r of item.records){const c=C.comparison(item,r.from,0);if(c)return {year:r.from,comparison:c};}
- return null;
+// Years are per product: only the years with a documented comparison for that product are ever offered.
+// A card always uses the product's headline comparison: its documented year with the biggest change.
+const headlineCache=new Map();
+function headlineMatch(item){
+ if(headlineCache.has(item.id))return headlineCache.get(item.id);
+ let best=null;
+ for(const r of item.records){const comparison=C.comparison(item,r.from,0);if(!comparison)continue;const p=Math.abs(comparison.result.percent),d=Math.abs(comparison.result.difference);if(!best||p>best.p||(p===best.p&&d>best.d))best={year:r.from,comparison,p,d};}
+ const out=best?{year:best.year,comparison:best.comparison}:null;headlineCache.set(item.id,out);return out;
+}
+function previewMatch(item){return headlineMatch(item);}
+function yearsFor(item){return item.records.map(r=>r.from).filter(y=>C.comparison(item,y,0));}
+function setYearOptions(item,preferred){
+ const years=yearsFor(item);
+ $('year').replaceChildren(...years.map(y=>{const o=document.createElement('option');o.value=String(y);o.textContent=y===1996?'1996年・三十年前':`${y}年・資料の時点`;return o;}));
+ const target=years.includes(preferred)?preferred:headlineMatch(item)?.year;
+ if(target!==undefined)$('year').value=String(target);
 }
 function previewFor(item){return previewMatch(item)?.comparison||null;}
 function deltaText(comparison){
@@ -33,7 +42,7 @@ function sourceLinks(item){
 function imageFor(item,container){container.replaceChildren();if(item.art){const img=document.createElement('img');img.src=item.art;img.alt=item.name+'の生成イラスト';img.loading='lazy';container.append(img);}else{const s=document.createElement('span');s.className='category-caption';s.textContent=item.category;container.append(s);}}
 function selectProduct(item,scroll=true){state.revealedId=item.id;
  state.selected=item;
- if(!$('keep-year').checked&&!ready(item))$('year').value=String(item.records.find(r=>C.comparison(item,r.from,0)).from);
+ setYearOptions(item);
  render();products();
  // Switching from inside the comparison (前へ・次へ・一覧から選ぶ) keeps the reader where they are.
  if(!scroll)return;
@@ -41,17 +50,17 @@ function selectProduct(item,scroll=true){state.revealedId=item.id;
  $('compare').scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
 }
 function categories(){
- $('categories').replaceChildren(...['すべて',...new Set(data.map(i=>i.category))].map(category=>{const button=document.createElement('button');button.type='button';button.className='category-button';button.textContent=category;button.setAttribute('aria-pressed',String(category===state.category));button.addEventListener('click',()=>{state.category=category;state.limit=24;categories();products();$('genre-summary').textContent=category==='すべて'?'ジャンル・年代で絞る':`ジャンル：${category}`;});return button;}));
+ $('categories').replaceChildren(...['すべて',...new Set(data.map(i=>i.category))].map(category=>{const button=document.createElement('button');button.type='button';button.className='category-button';button.textContent=category;button.setAttribute('aria-pressed',String(category===state.category));button.addEventListener('click',()=>{state.category=category;state.limit=24;categories();products();$('genre-summary').textContent=category==='すべて'?'ジャンルで絞る':`ジャンル：${category}`;});return button;}));
 }
 function products(){
- const query=normalize($('search').value.trim()),only=$('only-ready').checked;
- const filtered=data.filter(item=>(state.category==='すべて'||item.category===state.category)&&normalize(item.searchText).includes(query)&&(!only||ready(item)));
+ const query=normalize($('search').value.trim());
+ const filtered=data.filter(item=>(state.category==='すべて'||item.category===state.category)&&normalize(item.searchText).includes(query));
  // Impact order: each item's biggest price change (either direction, best record) first; ties by yen difference, then catalogue order.
  const ranked=filtered.map((item,index)=>{const match=previewMatch(item);return {item,index,match,preview:match?.comparison,impact:C.impactOf(item)};}).sort((a,b)=>((b.impact?.percent||0)-(a.impact?.percent||0))||((b.impact?.difference||0)-(a.impact?.difference||0))||a.index-b.index);
  state.order=ranked.map(r=>r.item);productNav();
  const shown=ranked.slice(0,state.limit);
- text('result-count',`${filtered.length}件のうち${shown.length}件を表示`);$('clear-filters').hidden=!query&&state.category==='すべて'&&!only;
- text('catalogue-total',`出典付きの${data.length}商品`);text('ready-year-label',`${currentYear()}年で比較できるもの`);
+ text('result-count',`${filtered.length}件のうち${shown.length}件を表示`);$('clear-filters').hidden=!query&&state.category==='すべて';
+ text('catalogue-total',`出典付きの${data.length}商品`);
  $('catalogue-grid').replaceChildren(...shown.map(({item,match,preview})=>{
   const open=state.openIds.has(item.id),answerId='card-answer-'+item.id;
   const card=document.createElement('div');card.className='product-card'+(item.id===state.selected.id?' selected':'')+(open?' open':'');
@@ -87,13 +96,9 @@ function stepProduct(step){
 function render(){
  const item=state.selected,year=currentYear(),before=C.historicalRecord(item.records,year),after=item.current;
  $('comparison').classList.toggle('without-art',!item.art);
- text('selection-help',$('keep-year').checked?'年代を固定しています。資料のない商品は「未確認」と表示します。':'商品を選ぶと、資料のある年代に自動で切り替わります。');
+ text('selection-help','年代は、この商品に資料のある年だけを表示しています。');
  const beforePrice=C.taxExclusive(before),afterPrice=C.taxExclusive(after),comparison=C.comparison(item,year,0);
  state.snapshot=null;$('save').disabled=true;text('save-status','');$('share').hidden=location.protocol==='file:';$('share').disabled=!comparison;text('share-status','');$('share-fallback').hidden=true;
- const available=[...$('year').options].map(o=>Number(o.value)).filter(y=>C.comparison(item,y,0));
- const referenceYear=!available.length&&!before&&item.records.length?item.records[0].from:null;
- $('available-period').hidden=Boolean(comparison)||(!available.length&&!referenceYear);
- if(available.length||referenceYear){const next=available[0]||referenceYear;text('available-period',available.length?`資料のある${next}年で比べる`:`確認済みの${next}年の価格を見る`);$('available-period').onclick=()=>{$('year').value=String(next);render();products();};}
  $('quantity-comparison').hidden=!comparison?.unitComparison;
  if(comparison?.unitComparison)text('quantity-comparison',unitText(comparison));
  text('selected-category',item.category);text('brand',item.brand);text('name',item.name);text('spec',item.spec);
@@ -192,19 +197,17 @@ $('save').addEventListener('click',async()=>{
  finally{if(state.snapshot===s)$('save').disabled=false;}
 });
 $('custom-form').addEventListener('submit',event=>{event.preventDefault();if(!$('custom-form').reportValidity())return;try{const name=$('custom-name').value.trim();if(!name)throw Error('商品名を入力してください。');const r=C.compare(Number($('custom-before').value),Number($('custom-after').value),0);text('custom-result',`「${name}」の価格の変化は${percentLabel(r.percent)}。あなたの入力による参考比較で、公表データではありません。`);}catch(error){text('custom-result',error.message);}});
-$('keep-year').addEventListener('change',()=>{if(!$('keep-year').checked&&!ready(state.selected))$('year').value=String(state.selected.records.find(r=>C.comparison(state.selected,r.from,0)).from);render();products();});
-$('search').addEventListener('input',()=>{state.limit=24;products();});$('only-ready').addEventListener('change',()=>{state.limit=24;products();});$('year').addEventListener('change',()=>{$('keep-year').checked=true;state.limit=24;render();products();});$('more').addEventListener('click',()=>{state.limit+=24;products();});
+$('search').addEventListener('input',()=>{state.limit=24;products();});$('year').addEventListener('change',()=>{render();});$('more').addEventListener('click',()=>{state.limit+=24;products();});
 $('prev-product').addEventListener('click',()=>stepProduct(-1));$('next-product').addEventListener('click',()=>stepProduct(1));
 $('product-select').addEventListener('change',()=>{const item=data.find(i=>i.id===$('product-select').value);if(item)selectProduct(item,false);});
-const years=[...new Set([1996,2006,2016,...data.flatMap(i=>i.records.map(r=>r.from))])].filter(y=>y>=1900&&y<=2026).sort((a,b)=>a-b);
-$('year').replaceChildren(...years.map(y=>{const o=document.createElement('option');o.value=String(y);o.textContent=y===1996?'1996年・三十年前':`${y}年・資料の時点`;return o;}));$('year').value='1996';
 const shared=new URLSearchParams(location.search),sharedItem=data.find(i=>i.id===shared.get('item')),sharedYear=Number(shared.get('year'));
-if(sharedItem){state.selected=sharedItem;const valid=C.comparison(sharedItem,sharedYear,0);$('year').value=String(valid?sharedYear:sharedItem.records.find(r=>C.comparison(sharedItem,r.from,0)).from);}
+if(sharedItem)state.selected=sharedItem;
+setYearOptions(state.selected,sharedItem&&C.comparison(sharedItem,sharedYear,0)?sharedYear:undefined);
 const documented=data.filter(i=>i.status==='documented').length;
 text('coverage-summary',`出典付きで比較できる${documented}商品を収録。比較する年代は商品ごとに異なります。すべてが1996年と2026年の比較ではありません。`);
 categories();render();products();
 
-$('clear-filters').addEventListener('click',()=>{state.category='すべて';state.limit=24;$('search').value='';$('only-ready').checked=false;categories();products();$('genre-summary').textContent='ジャンル・年代で絞る';$('search').focus({preventScroll:true});});
+$('clear-filters').addEventListener('click',()=>{state.category='すべて';state.limit=24;$('search').value='';categories();products();$('genre-summary').textContent='ジャンルで絞る';$('search').focus({preventScroll:true});});
 document.querySelector('.back-to-products').addEventListener('click',()=>{$('search').focus({preventScroll:true});});
 $('share').addEventListener('click',async()=>{
  const s=state.snapshot;if(!s)return;
