@@ -208,8 +208,8 @@ function ranking(){
   const no=document.createElement('span');no.className='rank-no';no.textContent=String(index+1);button.append(no);
   if(item.art){const img=document.createElement('img');img.className='rank-art';img.src=item.art;img.alt='';img.loading='lazy';button.append(img);}
   const copy=document.createElement('span');copy.className='rank-copy';
-  for(const [cls,value]of [['rank-name',item.brand+' '+item.name],['rank-price',`${record.from}年 ${priceText(record)} → 現在 ${priceText(item.current)}`]]){const span=document.createElement('span');span.className=cls;span.textContent=value;copy.append(span);}
-  const pct=document.createElement('span');pct.className='rank-percent';pct.textContent=percentLabel(result.percent);
+  for(const [cls,value]of [['rank-name',item.brand+' '+item.name],['rank-price',`${record.from}年 → 現在`]]){const span=document.createElement('span');span.className=cls;span.textContent=value;copy.append(span);}
+  const pct=document.createElement('span');pct.className='rank-percent';pct.textContent='いくら変わった？';
   button.append(copy,pct);
   button.addEventListener('click',()=>{$('year').value=String(record.from);$('keep-year').checked=true;state.limit=24;selectProduct(item);});
   li.append(button);return li;
