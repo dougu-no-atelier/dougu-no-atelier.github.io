@@ -202,20 +202,7 @@ const shared=new URLSearchParams(location.search),sharedItem=data.find(i=>i.id==
 if(sharedItem){state.selected=sharedItem;const valid=C.comparison(sharedItem,sharedYear,0);$('year').value=String(valid?sharedYear:sharedItem.records.find(r=>C.comparison(sharedItem,r.from,0)).from);}
 const documented=data.filter(i=>i.status==='documented').length;
 text('coverage-summary',`出典付きで比較できる${documented}商品を収録。比較する年代は商品ごとに異なります。すべてが1996年と2026年の比較ではありません。`);
-function ranking(){
- $('rankingList').replaceChildren(...C.topIncreases(data,10).map(({item,record,result},index)=>{
-  const li=document.createElement('li'),button=document.createElement('button');button.type='button';button.className='rank-row';
-  const no=document.createElement('span');no.className='rank-no';no.textContent=String(index+1);button.append(no);
-  if(item.art){const img=document.createElement('img');img.className='rank-art';img.src=item.art;img.alt='';img.loading='lazy';button.append(img);}
-  const copy=document.createElement('span');copy.className='rank-copy';
-  for(const [cls,value]of [['rank-name',item.brand+' '+item.name],['rank-price',`${record.from}年 → 現在`]]){const span=document.createElement('span');span.className=cls;span.textContent=value;copy.append(span);}
-  const pct=document.createElement('span');pct.className='rank-percent';pct.textContent='いくら変わった？';
-  button.append(copy,pct);
-  button.addEventListener('click',()=>{$('year').value=String(record.from);$('keep-year').checked=true;state.limit=24;selectProduct(item);});
-  li.append(button);return li;
- }));
-}
-categories();render();products();ranking();
+categories();render();products();
 
 $('clear-filters').addEventListener('click',()=>{state.category='すべて';state.limit=24;$('search').value='';$('only-ready').checked=false;categories();products();$('genre-summary').textContent='ジャンル・年代で絞る';$('search').focus({preventScroll:true});});
 document.querySelector('.back-to-products').addEventListener('click',()=>{$('search').focus({preventScroll:true});});
